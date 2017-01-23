@@ -1,85 +1,107 @@
-import pygame
+import pygame as pg
 import os
 from random import randint
 import random
 import time
+from settings import *
 
-mainloop = True
-pygame.init()
+class Game:
+    game_running = True
+    clock = None
+    screen = None
+    background = None
+    myfont = None
+    words = []
+    words_displayed = []
+    SPAWN_WORD_EVENT = None
+    lives = 5
+    user_input = ""
 
-Clock = pygame.time.Clock()
+    def __init__(self):
+        pg.init()
+        self.clock = pg.time.Clock()
+        self.screen = pg.display.set_mode((WIDTH, HEIGHT))
+        self.background = pg.Surface(self.screen.get_size())
+        self.myfont = pg.font.SysFont("freesansbold", 30)
+        self.words = self.get_words_list()
+        self.set_word_spawn_event()
+        self.set_word_spawn_event_timer(700)
 
 
-WIDTH = 640
-HEIGHT = 480
-WORD_SPEED = 1
-FPS = 60
+    def draw_background(self, color):
+        self.background.fill(color)
+        self.background = self.background.convert()
+        self.screen.blit(self.background, (0,0))
 
-screen = pygame.display.set_mode((WIDTH,HEIGHT)) # Set screen size of pygame window
-background = pygame.Surface(screen.get_size())  # Create empty pygame surface
-background.fill((255,255,255))# Fill the background white color (red,green,blue)
-background = background.convert()  # Convert Surface to make blitting faster
+    def draw_text_on_screen(self, text, color, x, y):
+        to_render = self.myfont.render(text, False, color)
+        self.screen.blit(to_render, ( x, y ))
 
-myfont = pygame.font.SysFont("freesansbold", 30)
-screen.blit(background, (0, 0))
+    def get_words_list(self):
+        words = []
+        res_dir = os.path.join(os.path.dirname(__file__), os.pardir, 'resources')
+        f = open(os.path.join(res_dir, 'words.txt'))
+        try:
+            for line in f.readlines():
+                words.append(line.rstrip())
+        finally:
+            f.close()
+        return words
 
-words = []
-words_to_display = []
-res_dir = os.path.join(os.path.dirname(__file__), os.pardir, 'resources')
-f = open(os.path.join(res_dir, 'words.txt'))
-try:
-    for line in f.readlines():
-        words.append(line.rstrip())
-finally:
-    f.close()
+    def set_word_spawn_event(self):
+        self.SPAWN_WORD_EVENT = pg.USEREVENT + 1
 
-SPAWN_WORD_EVENT, t, trail = pygame.USEREVENT+1, 700, []
-pygame.time.set_timer(SPAWN_WORD_EVENT, t)
+    def set_word_spawn_event_timer(self, t):
+        pg.time.set_timer(self.SPAWN_WORD_EVENT, t)
 
-letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+    def remove_words_from_screen(self):
+        words_displayed_length = len(self.words_displayed)
+        self.words_displayed[:] = [ word for word in self.words_displayed if word[2] < HEIGHT ]
+        words_displayed_count_diff = words_displayed_length - len(self.words_displayed)
+        if words_displayed_count_diff > 0: self.lives -= words_displayed_count_diff 
 
-user_input = ""
-lives = 5
+    def game_over_if_no_lives(self):
+        if self.lives == 0: self.game_running = False 
 
-while mainloop:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            mainloop = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                mainloop = False
-            if pygame.key.name(event.key) in letters:
-                user_input += pygame.key.name(event.key).lower()
-            if pygame.key.name(event.key) == 'backspace':
-                user_input = user_input[:-1]
-            if pygame.key.name(event.key).lower() == 'return':
-                words_to_display[:] = [ word for word in words_to_display if user_input != word[0] ]
-                user_input = ""
-        if event.type == SPAWN_WORD_EVENT:
-            word_x_y = [random.choice(words), randint(0, WIDTH - 20), 0]
-            words_to_display.append(word_x_y)
+    def get_key_events(self):
+        for e in pg.event.get():
+            if e.type == pg.QUIT:
+                self.game_running = False
+            if e.type == pg.KEYDOWN:
+                if e.key == pg.K_ESCAPE:
+                    self.game_running = False
+                if pg.key.name(e.key).lower().isalpha() and len(pg.key.name(e.key)) == 1:
+                    self.user_input += pg.key.name(e.key).lower()
+                if pg.key.name(e.key) == 'backspace':
+                    self.user_input = self.user_input[:-1]
+                if pg.key.name(e.key).lower() == 'return':
+                    print self.user_input
+                    self.words_displayed[:] = [ word for word in self.words_displayed if self.user_input != word[0] ]
+                    self.user_input = ""
+            if e.type == self.SPAWN_WORD_EVENT:
+                word_x_y = [random.choice(self.words), randint(0, WIDTH - 20), 0]
+                self.words_displayed.append(word_x_y)
 
-    background.fill((255,255,255))# Fill the background white color (red,green,blue)
-    screen.blit(background, (0, 0))
+    def update(self):
+        for word in self.words_displayed:
+            word[2] += WORD_SPEED
+            self.draw_text_on_screen(word[0], (0,0,0), word[1], word[2])
+        self.draw_text_on_screen(self.user_input, (255,0,0), WIDTH / 2, HEIGHT / 2)
 
-    lives_text = myfont.render(str(lives), False, (0,0,0))
-    screen.blit(lives_text, ( 10, 10 ))
+    def draw(self):
+        self.clock.tick(FPS)
+        pg.display.update() 
 
-    words_to_display_len = len(words_to_display)
-    words_to_display[:] = [ word for word in words_to_display if word[2] < HEIGHT ]
-    words_list_len_difference = words_to_display_len - len(words_to_display)
-    if words_list_len_difference > 0: lives -= words_list_len_difference
 
-    if lives == 0: mainloop = False
- 
-    for word in words_to_display:
-        word[2] += WORD_SPEED
-        textsurface = myfont.render(word[0], False, (0,0,0))
-        screen.blit(textsurface, (word[1] , word[2]))
+    def game_loop(self):
+        while self.game_running:
+            self.get_key_events()
+            self.draw_background((255, 255, 255))
+            self.draw_text_on_screen(str(self.lives), (0,0,0), 10, 10)
+            self.remove_words_from_screen()
+            self.game_over_if_no_lives()
+            self.update()
+            self.draw()
 
-    user_input_text = myfont.render(user_input, False, (255,0,0))
-    screen.blit(user_input_text, ( WIDTH / 2, HEIGHT - 100 ))
-
-    Clock.tick(FPS)
-    pygame.display.update() 
-
+game = Game()
+game.game_loop()
